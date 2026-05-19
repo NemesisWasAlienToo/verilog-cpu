@@ -5,8 +5,9 @@ module pc (
     input  wire       load,
     input  wire       data_output_enable,
     input  wire       address_output_enable,
-    input  wire [7:0] data_in,
-    output wire [7:0] data_out,
+    
+    inout  wire [7:0] data_bus,
+    output wire [7:0] data_alu,
     output wire [7:0] address_out
 );
 
@@ -16,13 +17,14 @@ module pc (
         if (reset) begin
             q <= 8'b00000000;
         end else if (load) begin
-            q <= data_in;
+            q <= data_bus;
         end else if (increment) begin
             q <= q + 1;
         end
     end
 
-    assign data_out = (data_output_enable) ? q : 8'bz;
+    assign data_bus    = (data_output_enable) ? q : 8'bz;
     assign address_out = (address_output_enable) ? q : 8'bz;
+    assign data_alu = q;
 
 endmodule
