@@ -44,12 +44,11 @@ module cu (
     reg [7:0] ir = 8'b00000000;
     
     /* 3-Stage pipeline */
-    reg [2:0] stage;
-    always @(negedge clk or posedge reset) begin
+    reg [2:0] stage = 3'b100;
+    always @(posedge clk or posedge reset) begin
         if (reset) begin
             stage <= 3'b001; // Start at Fetch
         end else begin
-            // Shift left, wrap the top bit back to the bottom
             stage <= {stage[1:0], stage[2]}; 
         end
     end
@@ -58,7 +57,7 @@ module cu (
         if (reset) begin
             ir <= 8'h00;
         end else if (stage[0]) begin
-            ir <= data_bus; 
+            ir <= data_bus;
         end
     end
 

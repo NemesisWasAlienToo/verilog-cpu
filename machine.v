@@ -22,11 +22,16 @@ module machine(
         .mem_data_output_enable(mem_data_output_enable)
     );
 
-    assign data_bus = (mem_enable && mem_data_output_enable && !mem_write_enable) ? program_mem[address_bus] : 8'bz;
+    reg [7:0] mem_data_out;
+    assign data_bus = (mem_enable && mem_data_output_enable && !mem_write_enable) ? mem_data_out : 8'bz;
 
-    assign always @(negedge clk) begin
-        if (mem_enable && mem_write_enable && !mem_data_output_enable) begin
-            program_mem[address_bus] <= data_bus;
+    always @(negedge clk) begin
+        if (mem_enable) begin
+            if (mem_write_enable) begin
+                program_mem[address_bus] <= data_bus;
+            end else if (mem_data_output_enable) begin
+                mem_data_out <= program_mem[address_bus]
+            end
         end
     end
 
