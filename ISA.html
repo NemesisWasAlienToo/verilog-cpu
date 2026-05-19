@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8-Bit CPU Microcode Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+        
+        textarea {
+            tab-size: 4;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+
+    <div class="w-full max-w-6xl space-y-6">
+        
+        <header class="text-center space-y-2">
+            <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                Microcode Studio
+            </h1>
+            <p class="text-gray-400">Define your pins, script your combinational logic, and generate the ROM.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Pin Definition Panel -->
+            <div class="bg-[#1e1e1e] border border-gray-700 rounded-xl p-6 shadow-xl flex flex-col h-full">
+                <h3 class="text-lg font-semibold text-white mb-2">1. Pin Order (Verilog Unpack Order)</h3>
+                <p class="text-xs text-gray-400 mb-4">Comma-separated list. This determines the exact length and order of the binary word (MSB to LSB). Add new pins here if your architecture expands.</p>
+                <textarea id="pin-list" class="w-full bg-[#0d0d0d] text-emerald-300 font-mono text-sm p-4 rounded border border-gray-700 focus:border-blue-500 focus:outline-none resize-y h-32" spellcheck="false">pc_increment, pc_load, pc_data_output_enable, pc_address_output_enable, reg_a_load, reg_a_data_output_enable, reg_a_address_output_enable, reg_b_load, reg_b_data_output_enable, reg_b_address_output_enable, alu_cmd_add, alu_cmd_sub, alu_cmd_and, alu_cmd_or, alu_cmd_xor, mem_data_output_enable, mem_write_enable</textarea>
+            </div>
+
+            <!-- Logic Definition Panel -->
+            <div class="bg-[#1e1e1e] border border-gray-700 rounded-xl p-6 shadow-xl flex flex-col h-full">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-semibold text-white">2. Combinational Logic (JS)</h3>
+                    <button onclick="applyAndPreview()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-2 px-4 rounded shadow active:scale-95 transition-all">
+                        Apply & Run
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mb-4">Variables <code class="text-pink-400">inst</code> (0-255), <code class="text-pink-400">z</code> (0-1), and <code class="text-pink-400">n</code> (0-1) are provided. Return an object matching the pins.</p>
+                
+                <textarea id="logic-code" class="w-full flex-1 bg-[#0d0d0d] text-blue-300 font-mono text-sm p-4 rounded border border-gray-700 focus:border-blue-500 focus:outline-none resize-y min-h-[300px]" spellcheck="false">
+// 1. Extract Bitfields
+let type_bit  = (inst >> 7) & 1;
+let cond_code = (inst >> 5) & 3;
+let sub_op    = (inst >> 4) & 1;
+let dest_sel  = (inst >> 2) & 3;
+let src_sel   = inst & 3;
+
+// 2. Decode Major Groups
+let is_alu  = (type_bit === 1);
+let cmd_mov = (type_bit === 0) && (cond_code !== 3);
+let is_mem  = (type_bit === 0) && (cond_code === 3);
+
+let cmd_rd  = is_mem && (sub_op === 0);
+let cmd_wr  = is_mem && (sub_op === 1);
+
+let cond_al  = (cond_code === 0);
+let cond_z   = (cond_code === 1) && z;
+let cond_n   = (cond_code === 2) && n;
+let cond_met = cond_al || cond_z || cond_n;
+
+// 3. Register Load Controls
+let reg_write_enable = is_alu || cmd_rd || (cmd_mov && cond_met);
+let reg_a_load = reg_write_enable && (dest_sel === 0);
+let reg_b_load = reg_write_enable && (dest_sel === 1);
+let pc_load    = reg_write_enable && (dest_sel === 2);
+
+// 4. Data Output Controls
+let bus_driver_sel = cmd_wr ? dest_sel : src_sel;
+let bus_drive_en   = is_alu || cmd_mov || cmd_wr;
+
+let reg_a_data_output_enable = bus_drive_en && (bus_driver_sel === 0);
+let reg_b_data_output_enable = bus_drive_en && (bus_driver_sel === 1);
+let pc_data_output_enable    = bus_drive_en && (bus_driver_sel === 2);
+
+// 5. ALU Controls
+let alu_op = (inst >> 4) & 7;
+let alu_cmd_add = is_alu && (alu_op === 0);
+let alu_cmd_sub = is_alu && (alu_op === 1);
+let alu_cmd_and = is_alu && (alu_op === 2);
+let alu_cmd_or  = is_alu && (alu_op === 3);
+let alu_cmd_xor = is_alu && (alu_op === 4);
+
+// 6. Address Output Controls
+let pc_increment                = 0;
+let pc_address_output_enable    = 0;
+let reg_a_address_output_enable = 0;
+let reg_b_address_output_enable = 0;
+
+// 7. Memory Controls
+let mem_data_output_enable = cmd_rd || ((is_alu || cmd_mov) && (src_sel === 3));
+let mem_write_enable       = cmd_wr;
+
+// UI Helper: Label the action for the preview table
+let _action = "NOP / Invalid";
+if (cmd_mov && cond_met) _action = "MOV";
+else if (cmd_mov && !cond_met) _action = "MOV (Skip)";
+else if (cmd_rd) _action = "RD";
+else if (cmd_wr) _action = "WR";
+else if (is_alu) _action = "ALU Op";
+
+// Return the mapped pins
+return {
+    _action, // Hidden UI helper
+    pc_increment, pc_load, pc_data_output_enable, pc_address_output_enable,
+    reg_a_load, reg_a_data_output_enable, reg_a_address_output_enable,
+    reg_b_load, reg_b_data_output_enable, reg_b_address_output_enable,
+    alu_cmd_add, alu_cmd_sub, alu_cmd_and, alu_cmd_or, alu_cmd_xor,
+    mem_data_output_enable, mem_write_enable
+};
+</textarea>
+            </div>
+        </div>
+
+        <div id="error-box" class="hidden bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-xl shadow-lg">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-between bg-[#1e1e1e] border border-gray-700 rounded-xl p-4 shadow-xl">
+            <div class="text-sm text-gray-400">
+                Status: <span id="status-text" class="text-emerald-400 font-bold">Ready</span>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-3 mt-4 sm:mt-0">
+                <input type="file" id="file-input" accept=".json" class="hidden" onchange="loadProject(event)">
+                <button onclick="document.getElementById('file-input').click()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition-all active:scale-95 flex items-center gap-2 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="5 12 12 5 19 12"></polyline><line x1="12" y1="19" x2="12" y2="5"></line></svg>
+                    Load Project
+                </button>
+                <button onclick="saveProject()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition-all active:scale-95 flex items-center gap-2 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    Save Project
+                </button>
+                <button onclick="downloadBin()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-lg shadow-lg transition-all active:scale-95 flex items-center gap-2 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Download .bin
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-[#1e1e1e] border border-gray-700 rounded-xl shadow-xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-gray-700 bg-[#252526] flex flex-col sm:flex-row justify-between items-center gap-4">
+                <h3 class="text-lg font-semibold text-white">ROM Preview <span class="text-xs text-gray-400 ml-2 font-normal">(Click any bit to flip it manually)</span></h3>
+                <div class="flex items-center gap-3 bg-gray-800 p-1 rounded-lg border border-gray-700">
+                    <button onclick="prevPage()" class="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1 rounded transition-colors text-sm">&larr; Prev</button>
+                    <span id="page-indicator" class="text-xs text-gray-400 font-mono min-w-[100px] text-center">Page 1 of 32</span>
+                    <button onclick="nextPage()" class="text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-1 rounded transition-colors text-sm">Next &rarr;</button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse font-mono text-sm whitespace-nowrap">
+                    <thead>
+                        <tr id="preview-header" class="bg-[#2d2d2d] text-gray-300">
+                            <!-- Populated by JS -->
+                        </tr>
+                    </thead>
+                    <tbody id="preview-body" class="divide-y divide-gray-800">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cachedMicrocode = [];
+        let currentPage = 0;
+        const ROWS_PER_PAGE = 32;
+
+        function getPins() {
+            const raw = document.getElementById('pin-list').value;
+            return raw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }
+
+        function generateData() {
+            const pinArray = getPins();
+            const logicString = document.getElementById('logic-code').value;
+            let microcode = [];
+            
+            let logicFn;
+            try {
+                // Dynamically create a function from the textarea
+                logicFn = new Function('inst', 'z', 'n', logicString);
+            } catch (e) {
+                return { error: "Syntax Error in Logic: " + e.message };
+            }
+
+            for (let i = 0; i < 1024; i++) {
+                let n = (i >> 9) & 1;
+                let z = (i >> 8) & 1;
+                let inst = i & 0xFF;
+
+                try {
+                    // Evaluate the user's logic
+                    let resultObj = logicFn(inst, z, n);
+                    
+                    // Map the returned object to the binary array based on the Pin order
+                    let wordArr = pinArray.map(pin => {
+                        if (resultObj[pin] === undefined) return "0"; // Default to 0 if missing
+                        return resultObj[pin] ? "1" : "0";
+                    });
+
+                    let action = resultObj._action || "Custom";
+
+                    microcode.push({
+                        address: i, n, z, inst,
+                        word: wordArr.join(""),
+                        action: action,
+                        pins: wordArr
+                    });
+                } catch (e) {
+                    return { error: `Execution Error at Inst ${inst}: ` + e.message };
+                }
+            }
+            return { data: microcode, pinArray, error: null };
+        }
+
+        function applyAndPreview() {
+            const errorBox = document.getElementById('error-box');
+            const errorMsg = document.getElementById('error-message');
+            const statusTxt = document.getElementById('status-text');
+            const thead = document.getElementById('preview-header');
+            const tbody = document.getElementById('preview-body');
+
+            errorBox.classList.add('hidden');
+            statusTxt.textContent = "Processing...";
+            statusTxt.className = "text-yellow-400 font-bold";
+
+            const result = generateData();
+
+            if (result.error) {
+                errorMsg.textContent = result.error;
+                errorBox.classList.remove('hidden');
+                statusTxt.textContent = "Failed";
+                statusTxt.className = "text-red-400 font-bold";
+                return;
+            }
+
+            cachedMicrocode = result.data;
+            currentPage = 0; // Reset to page 1 on new compile
+
+            renderTable(result.pinArray);
+
+            statusTxt.textContent = `Success (${result.pinArray.length}-bit word generated)`;
+            statusTxt.className = "text-emerald-400 font-bold";
+        }
+
+        function renderTable(pinArray = getPins()) {
+            const thead = document.getElementById('preview-header');
+            const tbody = document.getElementById('preview-body');
+            const pageIndicator = document.getElementById('page-indicator');
+
+            const totalPages = Math.ceil(cachedMicrocode.length / ROWS_PER_PAGE);
+            pageIndicator.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+
+            // Render Header
+            let headerHTML = `
+                <th class="p-4 border-b border-gray-700 font-medium text-xs">ADDRESS<br><span class="text-gray-500 text-[10px]">N, Z, [7:0]</span></th>
+                <th class="p-4 border-b border-gray-700 font-medium text-xs text-emerald-400">INST</th>
+            `;
+            
+            // Build vertical headers for pins so it doesn't stretch 5 miles wide
+            let pinHTML = pinArray.map((pin, idx) => `
+                <th class="p-4 border-b border-gray-700 font-medium text-[10px] text-center" title="${pin}">
+                    <div class="-rotate-90 w-4 h-24 overflow-visible relative">
+                        <span class="absolute bottom-0 left-0 whitespace-nowrap text-gray-400">${pin}</span>
+                    </div>
+                </th>
+            `).join("");
+            
+            headerHTML += pinHTML + `<th class="p-4 border-b border-gray-700 font-medium text-xs">DECODED ACTION</th>`;
+            thead.innerHTML = headerHTML;
+
+            // Render Body
+            tbody.innerHTML = "";
+            let startIdx = currentPage * ROWS_PER_PAGE;
+            let endIdx = Math.min(startIdx + ROWS_PER_PAGE, cachedMicrocode.length);
+
+            for(let i = startIdx; i < endIdx; i++) {
+                let d = cachedMicrocode[i];
+                let addrBin = d.address.toString(2).padStart(10, '0');
+                let formattedAddr = `<span class="text-gray-500">${addrBin.substring(0,2)}</span> ${addrBin.substring(2)}`;
+                let instBin = d.inst.toString(2).padStart(8, '0');
+                
+                let rowHTML = `
+                    <td class="p-4 text-gray-400">${formattedAddr}</td>
+                    <td class="p-4 text-emerald-300">${instBin}</td>
+                `;
+                
+                // Add individual pin columns
+                d.pins.forEach((p, pinIdx) => {
+                    let isManuallyFlipped = d.overrides && d.overrides[pinIdx];
+                    let baseColor = p === "1" ? "text-blue-400 font-bold" : "text-gray-600";
+                    let color = isManuallyFlipped ? "text-yellow-400 font-bold" : baseColor;
+                    
+                    // Make the bit cell clickable
+                    rowHTML += `<td class="p-4 text-center ${color} cursor-pointer hover:bg-gray-700 hover:text-white rounded transition-all active:scale-90 select-none" 
+                                    onclick="toggleBit(${i}, ${pinIdx})" id="bit-${i}-${pinIdx}" title="Click to flip ${pinArray[pinIdx]}">${p}</td>`;
+                });
+
+                rowHTML += `<td class="p-4 font-sans font-medium text-gray-300 focus:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded transition-colors" contenteditable="true" onblur="updateAction(${i}, this.innerText)" title="Click to edit action name">${d.action}</td>`;
+                
+                let tr = document.createElement("tr");
+                tr.className = "hover:bg-[#2a2a2b] transition-colors";
+                tr.innerHTML = rowHTML;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function toggleBit(rowIdx, pinIdx) {
+            let d = cachedMicrocode[rowIdx];
+            
+            // Initialize overrides tracker if not present
+            if (!d.overrides) d.overrides = {};
+            
+            // Flip the bit
+            let currentBit = d.pins[pinIdx];
+            let newBit = currentBit === "1" ? "0" : "1";
+            d.pins[pinIdx] = newBit;
+            
+            // Toggle override state (marks it yellow)
+            d.overrides[pinIdx] = !d.overrides[pinIdx];
+            
+            // Rebuild the binary word string for the download
+            d.word = d.pins.join("");
+            
+            // Update the DOM element directly for high performance rendering
+            let td = document.getElementById(`bit-${rowIdx}-${pinIdx}`);
+            td.textContent = newBit;
+            
+            let isManuallyFlipped = d.overrides[pinIdx];
+            let baseColor = newBit === "1" ? "text-blue-400 font-bold" : "text-gray-600";
+            let activeColor = isManuallyFlipped ? "text-yellow-400 font-bold" : baseColor;
+            
+            td.className = `p-4 text-center ${activeColor} cursor-pointer hover:bg-gray-700 hover:text-white rounded transition-all active:scale-90 select-none`;
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                renderTable();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(cachedMicrocode.length / ROWS_PER_PAGE);
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                renderTable();
+            }
+        }
+
+        function updateAction(rowIdx, newText) {
+            cachedMicrocode[rowIdx].action = newText;
+        }
+
+        function saveProject() {
+            if (cachedMicrocode.length === 0) applyAndPreview();
+            if (cachedMicrocode.length === 0) return;
+
+            const projectData = {
+                pins: document.getElementById('pin-list').value,
+                logic: document.getElementById('logic-code').value,
+                data: cachedMicrocode
+            };
+
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'microcode_project.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            const statusTxt = document.getElementById('status-text');
+            statusTxt.textContent = "Project Saved";
+            statusTxt.className = "text-blue-400 font-bold";
+        }
+
+        function loadProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const projectData = JSON.parse(e.target.result);
+                    
+                    if (projectData.pins !== undefined) document.getElementById('pin-list').value = projectData.pins;
+                    if (projectData.logic !== undefined) document.getElementById('logic-code').value = projectData.logic;
+                    if (projectData.data !== undefined) cachedMicrocode = projectData.data;
+                    
+                    currentPage = 0;
+                    renderTable(getPins());
+                    
+                    const statusTxt = document.getElementById('status-text');
+                    statusTxt.textContent = "Project Loaded Successfully";
+                    statusTxt.className = "text-emerald-400 font-bold";
+                    document.getElementById('error-box').classList.add('hidden');
+                } catch (err) {
+                    const errorMsg = document.getElementById('error-message');
+                    errorMsg.textContent = "Failed to parse JSON project file.";
+                    document.getElementById('error-box').classList.remove('hidden');
+                    
+                    const statusTxt = document.getElementById('status-text');
+                    statusTxt.textContent = "Load Failed";
+                    statusTxt.className = "text-red-400 font-bold";
+                }
+            };
+            reader.readAsText(file);
+            
+            // Clear input value so you can re-upload the same file if needed
+            event.target.value = '';
+        }
+
+        function downloadBin() {
+            if (cachedMicrocode.length === 0) {
+                applyAndPreview();
+            }
+            if (cachedMicrocode.length === 0) return; // Prevent download if errors
+
+            const textContent = cachedMicrocode.map(d => d.word).join("\n");
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'microcode.bin';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Run once on boot
+        window.onload = applyAndPreview;
+    </script>
+</body>
+</html>
