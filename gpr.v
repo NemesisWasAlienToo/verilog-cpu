@@ -10,7 +10,7 @@ module gpr (
     output wire [7:0] address_out
 );
 
-    reg [7:0] q;
+    reg [7:0] q = 8'h00;
 
     always @(negedge clk or posedge reset) begin
         if (reset)

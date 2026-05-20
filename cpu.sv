@@ -60,26 +60,26 @@ module tb_cpu_full;
         // -----------------------------------------------------------
         // 1. MOV B, #05 takes 3 cycles (Fetch, Inc, Exec/Fetch-Imm)
         // Note: The execution stage also double-increments PC!
-        @(posedge clk); @(posedge clk); @(posedge clk);
+        @(negedge clk); @(negedge clk); @(negedge clk);
         #1;
         if (uut.register_b.q == 8'h05) $display("[PASS] Executed: MOV B, #05");
         else $display("[FAIL] MOV B, #05. Got: %h", uut.register_b.q);
 
         // 2. MOV A, #AA takes 3 cycles
-        @(posedge clk); @(posedge clk); @(posedge clk);
+        @(negedge clk); @(negedge clk); @(negedge clk);
         #1;
         if (uut.register_a.q == 8'hAA) $display("[PASS] Executed: MOV A, #AA");
         else $display("[FAIL] MOV A, #AA. Got: %h", uut.register_a.q);
 
         // 3. ADD A, B takes 3 cycles
-        @(posedge clk); @(posedge clk); @(posedge clk);
+        @(negedge clk); @(negedge clk); @(negedge clk);
         #1;
         if (uut.register_a.q == 8'hAF) $display("[PASS] Executed: ADD A, B (Result: AF)");
         else $display("[FAIL] ADD A, B. Got: %h", uut.register_a.q);
 
         // 4. WR [A], B takes 3 cycles
-        @(posedge clk); @(posedge clk); @(posedge clk);
-        #1;
+        @(negedge clk); @(negedge clk); @(negedge clk);
+        #10;
         // Verify the mock RAM actually received the write!
         if (memory[8'hAF] == 8'h05) $display("[PASS] Executed: WR [A], B (Wrote 05 to Address AF)");
         else $display("[FAIL] WR [A], B. Memory at AF is: %h", memory[8'hAF]);

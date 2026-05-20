@@ -47,7 +47,7 @@ module cu (
     reg [2:0] stage = 3'b100;
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            stage <= 3'b001; // Start at Fetch
+            stage <= 3'b100; // Start at Fetch
         end else begin
             stage <= {stage[1:0], stage[2]}; 
         end
