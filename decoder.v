@@ -1,6 +1,6 @@
 module decoder(
     /* Control Input */
-    input  wire       enable,          // 0 = Outputs disabled, 1 = Outputs active
+    input  wire       enable, // Active high
     input  wire [7:0] instruction,
 
     /* PC Control */
@@ -34,7 +34,7 @@ module decoder(
     input  wire       alu_negative_flag,
 
     /* Memory Controls */
-    output wire       mem_enable,              // <-- NEW: Global memory enable
+    output wire       mem_enable,
     output wire       mem_data_output_enable,
     output wire       mem_write_enable
 );
@@ -91,10 +91,13 @@ module decoder(
     assign alu_cmd_xor = enable & (is_alu & (alu_op == 3'b100));
 
     // 6. ADDRESS & PC CLOCK CONTROLS (Grounded here)
-    assign pc_address_output_enable    = 1'b0; 
-    assign pc_increment                = 1'b0; 
+    wire is_immediate = (src_sel == 2'b11);
+    
+    assign pc_address_output_enable    = enable & is_immediate; 
+    assign pc_increment                = enable & is_immediate; 
+    
     assign reg_a_address_output_enable = 1'b0; 
-    assign reg_b_address_output_enable = 1'b0; 
+    assign reg_b_address_output_enable = 1'b0;
 
     // 7. MEMORY CONTROL SIGNALS
     
