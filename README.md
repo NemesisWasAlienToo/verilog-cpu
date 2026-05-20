@@ -52,3 +52,9 @@ iverilog -g2012 -o cpu.out cpu.v pc.v gpr.v decoder.v cu.v alu.v cpu.sv
 vvp cpu.out
 gtkwave cpu.vcd
 ```
+
+```sh
+iverilog -g2012 -o mcu.out cpu.v pc.v gpr.v decoder.v cu.v alu.v mcu.v memory_mapped_output.v memory_mapped_input.v mcu.sv
+vvp mcu.out
+gtkwave mcu.vcd
+```
