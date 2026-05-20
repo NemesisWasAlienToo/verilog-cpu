@@ -18,6 +18,7 @@ module alu (
 
     wire [7:0] op_l;
     wire [7:0] op_r;
+    wire [7:0] result;
     
     assign op_l = (l_arg == 2'b00) ? a :
                   (l_arg == 2'b01) ? b :
