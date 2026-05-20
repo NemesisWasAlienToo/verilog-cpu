@@ -52,6 +52,7 @@ module cpu(
     wire alu_enable, alu_cmd_add, alu_cmd_sub, alu_cmd_and, alu_cmd_or, alu_cmd_xor, alu_zero_flag, alu_negative_flag;
     wire [1:0] alu_l_arg;
     wire [1:0] alu_r_arg;
+    reg  [1:0] alu_flags = 2'b00;
     alu alu_unit(
         .enable(alu_enable),
         .a(reg_a_data_alu),
@@ -68,6 +69,14 @@ module cpu(
         .zero_flag(alu_zero_flag),
         .negative_flag(alu_negative_flag)
     );
+
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            alu_flags <= 2'b00;
+        end else if (alu_enable) begin // ONLY update flags when ALU is active!
+            alu_flags <= {alu_zero_flag, alu_negative_flag};
+        end
+    end
 
     cu control_unit(
         .clk(clk),
@@ -95,8 +104,8 @@ module cpu(
         .alu_cmd_or(alu_cmd_or),
         .alu_cmd_xor(alu_cmd_xor),
 
-        .alu_zero_flag(alu_zero_flag),
-        .alu_negative_flag(alu_negative_flag),
+        .alu_zero_flag(alu_flags[0]),
+        .alu_negative_flag(alu_flags[1]),
         
         .mem_enable(mem_enable),
         .mem_data_output_enable(mem_data_output_enable),

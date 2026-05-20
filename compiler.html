@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom 8-Bit CPU Assembler</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --surface: #252526;
+            --primary: #007acc;
+            --text: #d4d4d4;
+            --error: #f14c4c;
+            --success: #89d185;
+            --comment: #6a9955;
+            --keyword: #c586c0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        h1 { margin-top: 0; font-size: 24px; font-weight: 400; }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+        .pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .pane-header {
+            background: #2d2d2d;
+            padding: 10px 15px;
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        textarea {
+            flex: 1;
+            background: transparent;
+            color: var(--text);
+            border: none;
+            padding: 15px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+        }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #005f9e; }
+        #log {
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--surface);
+            border-radius: 4px;
+            font-family: monospace;
+            min-height: 20px;
+            border-left: 4px solid var(--primary);
+            white-space: pre-wrap;
+        }
+        .error { border-left-color: var(--error) !important; color: var(--error); }
+        .success { border-left-color: var(--success) !important; color: var(--success); }
+    </style>
+</head>
+<body>
+
+    <h1>Custom 8-Bit CPU Assembler</h1>
+
+    <div class="container">
+        <!-- Editor Pane -->
+        <div class="pane">
+            <div class="pane-header">
+                Assembly Source Code
+                <button onclick="compile()">Compile to .mem</button>
+            </div>
+            <textarea id="source" spellcheck="false">
+// ----------------------------------------
+// Countdown Loop Example
+// Demonstrates Constants & Conditionals!
+// ----------------------------------------
+
+.DEFINE OUT_PORT FF     // Output Port address
+.DEFINE START_VAL 05    // Starting countdown value
+
+START:
+    MOV A, #START_VAL   // Load starting value into A
+
+LOOP:
+    // Output current value of A
+    MOV B, #OUT_PORT
+    WR [B], A
+
+    // Decrement A by 1
+    MOV B, #01
+    SUB A, B            // Sets Zero Flag (Z) when A hits 0
+
+    // CONDITIONAL JUMP: If Zero Flag is 1, jump to DONE
+    MOV B, #DONE
+    MOV Z PC, B
+
+    // Otherwise, jump back to LOOP
+    MOV B, #LOOP
+    MOV PC, B
+
+DONE:
+    // Halt / Loop in place forever
+    MOV B, #DONE
+    MOV PC, B</textarea>
+        </div>
+
+        <!-- Output Pane -->
+        <div class="pane">
+            <div class="pane-header">
+                program.mem Output
+                <button onclick="copyOutput()">Copy</button>
+            </div>
+            <textarea id="output" readonly></textarea>
+        </div>
+    </div>
+
+    <div id="log">Ready to compile.</div>
+
+    <script>
+        const REGS = { 'A': '00', 'B': '01', 'PC': '10' };
+        const ALU_OPS = { 'ADD': '000', 'SUB': '001', 'AND': '010', 'OR': '011', 'XOR': '100' };
+        const CONDS = { '': '00', 'Z': '01', 'N': '10' };
+
+        function bin2hex(bin) {
+            return parseInt(bin, 2).toString(16).padStart(2, '0').toUpperCase();
+        }
+
+        function toHexByte(num) {
+            return num.toString(16).padStart(2, '0').toUpperCase();
+        }
+
+        function compile() {
+            const source = document.getElementById('source').value;
+            const lines = source.split('\n');
+            const log = document.getElementById('log');
+            
+            let memory = [];
+            let errors = [];
+            let labels = {};
+            let constants = {};
+            let cleanedLines = [];
+            let address = 0;
+
+            // --- PASS 0: Constants and cleanup ---
+            for (let i = 0; i < lines.length; i++) {
+                let rawLine = lines[i];
+                let lineText = rawLine.split('//')[0].split(';')[0].trim();
+                
+                if (lineText.toUpperCase().startsWith('.DEFINE')) {
+                    let parts = lineText.split(/\s+/);
+                    if (parts.length >= 3) {
+                        constants[parts[1]] = parts[2];
+                    }
+                    continue;
+                }
+                
+                // Replace constants in the line
+                for (let constName in constants) {
+                    let regex = new RegExp(`\\b${constName}\\b`, 'g');
+                    lineText = lineText.replace(regex, constants[constName]);
+                }
+                
+                if (lineText) {
+                    cleanedLines.push({ orig: rawLine, line: lineText.toUpperCase(), lineNum: i + 1 });
+                }
+            }
+
+            // --- PASS 1: Extract Labels and calculate addresses ---
+            let executableLines = [];
+            for (let inst of cleanedLines) {
+                let line = inst.line;
+                
+                if (line.endsWith(':')) {
+                    labels[line.slice(0, -1)] = address;
+                    continue;
+                }
+                
+                let parts = line.split(':');
+                if (parts.length > 1) {
+                    labels[parts[0].trim()] = address;
+                    line = parts[1].trim();
+                }
+                
+                if (!line) continue;
+
+                inst.line = line;
+                inst.addr = address;
+                executableLines.push(inst);
+                
+                address++; 
+                if (line.includes('#')) {
+                    address++; // Immediate values take an extra byte
+                }
+            }
+
+            // --- PASS 2: Generate Machine Code ---
+            for (let inst of executableLines) {
+                let line = inst.line;
+                let opcodeBin = '';
+                let immediate = null;
+                let matched = false;
+
+                // 1. ALU (ADD, SUB, AND, OR, XOR)
+                let m = line.match(/^(ADD|SUB|AND|OR|XOR)\s+(A|B|PC)\s*,\s*(A|B|PC)$/);
+                if (m) {
+                    opcodeBin = '1' + ALU_OPS[m[1]] + REGS[m[2]] + REGS[m[3]];
+                    matched = true;
+                }
+
+                // 2. MOV CONDITIONAL / UNCONDITIONAL (Register to Register)
+                if (!matched) {
+                    m = line.match(/^MOV\s*(Z|N)?\s+(A|B|PC)\s*,\s*(A|B|PC)$/);
+                    if (m) {
+                        let cond = m[1] || '';
+                        opcodeBin = '0' + CONDS[cond] + '0' + REGS[m[2]] + REGS[m[3]];
+                        matched = true;
+                    }
+                }
+
+                // 3. MOV IMMEDIATE (Supports hex '#FF' or labels '#LOOP')
+                if (!matched) {
+                    m = line.match(/^MOV\s*(Z|N)?\s+(A|B|PC)\s*,\s*#([0-9A-F]{1,2}|[A-Z_][A-Z0-9_]*)$/);
+                    if (m) {
+                        let cond = m[1] || '';
+                        opcodeBin = '0' + CONDS[cond] + '0' + REGS[m[2]] + '11';
+                        
+                        let val = m[3];
+                        if (labels[val] !== undefined) {
+                            immediate = toHexByte(labels[val]);
+                        } else if (!isNaN(parseInt(val, 16))) {
+                            immediate = toHexByte(parseInt(val, 16));
+                        } else {
+                            errors.push(`Line ${inst.lineNum}: Unknown label or invalid hex '${val}'`);
+                        }
+                        matched = true;
+                    }
+                }
+
+                // 4. MEMORY READ
+                if (!matched) {
+                    m = line.match(/^RD\s+\[(A|B|PC)\]\s*,\s*(A|B|PC)$/);
+                    if (m) {
+                        opcodeBin = '0110' + REGS[m[1]] + REGS[m[2]];
+                        matched = true;
+                    }
+                }
+
+                // 5. MEMORY WRITE
+                if (!matched) {
+                    m = line.match(/^WR\s+\[(A|B|PC)\]\s*,\s*(A|B|PC)$/);
+                    if (m) {
+                        opcodeBin = '0111' + REGS[m[1]] + REGS[m[2]];
+                        matched = true;
+                    }
+                }
+
+                if (matched) {
+                    let hexOut = bin2hex(opcodeBin);
+                    let displayOrig = inst.orig.trim();
+                    memory.push(`@${toHexByte(inst.addr)} ${hexOut}    // ${displayOrig}`);
+                    
+                    if (immediate !== null) {
+                        memory.push(`@${toHexByte(inst.addr + 1)} ${immediate}    //   (Immediate Data)`);
+                    }
+                } else {
+                    errors.push(`Line ${inst.lineNum}: Syntax error -> ${inst.line}`);
+                }
+            }
+
+            // --- OUTPUT RESULTS ---
+            const outputArea = document.getElementById('output');
+            if (errors.length > 0) {
+                outputArea.value = "";
+                log.className = "error";
+                log.innerText = "Compilation Failed:\n" + errors.join('\n');
+            } else {
+                outputArea.value = memory.join('\n');
+                log.className = "success";
+                log.innerText = `Successfully compiled ${memory.length} bytes.`;
+            }
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('output');
+            output.select();
+            document.execCommand('copy');
+        }
+        
+        compile();
+    </script>
+</body>
+</html>

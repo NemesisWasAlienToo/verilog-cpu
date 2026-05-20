@@ -1,16 +1,17 @@
-// program.mem
-// ----------------------------------------
-// I/O Echo Loop: Reads from FE, writes to FF
-// ----------------------------------------
-
-07      // @00: MOV B, #FE (Load Input Address)
-FE      // @01: Immediate value FE
-64      // @02: RD [B], A  (Read from Input to A)
-
-07      // @03: MOV B, #FF (Load Output Address)
-FF      // @04: Immediate value FF
-74      // @05: WR [B], A  (Write A to Output)
-
-07      // @06: MOV B, #00 (Load Jump Target)
-00      // @07: Immediate value 00
-09      // @08: MOV PC, B  (Jump back to 00)
+@00 03    // MOV A, #START_VAL   // Load starting value into A
+@01 05    //   (Immediate Data)
+@02 07    // MOV B, #OUT_PORT
+@03 FF    //   (Immediate Data)
+@04 74    // WR [B], A
+@05 07    // MOV B, #01
+@06 01    //   (Immediate Data)
+@07 91    // SUB A, B            // Sets Zero Flag (Z) when A hits 0
+@08 07    // MOV B, #DONE
+@09 0E    //   (Immediate Data)
+@0A 29    // MOV Z PC, B
+@0B 07    // MOV B, #LOOP
+@0C 02    //   (Immediate Data)
+@0D 09    // MOV PC, B
+@0E 07    // MOV B, #DONE
+@0F 0E    //   (Immediate Data)
+@10 09    // MOV PC, B
