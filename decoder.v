@@ -41,9 +41,8 @@ module decoder(
 
     /* COND   CMD                 DST        SRC                COUNT */
     /* [Z|N]  MOV                 {A,B,PC},  {A,B,PC,#VALUE}  : 3x3x4 */
-    /*        ADD/SUB/AND/OR/XOR  {A,B,PC},  {A,B,PC,#VALUE}  : 5x3x4 */
-    /*        RD/WR               {A,B,PC},  #ADDRESS         : 2x3   */
-
+    /*        ADD/SUB/AND/OR/XOR  {A,B,PC},  {A,B,PC}         : 5x3x3 */
+    /*        RD/WR               [A,B,PC],  {A,B,PC}         : 2x3   */
 
     // 1. EXTRACT BITFIELDS
     wire       type_bit  = instruction[7];   
@@ -67,18 +66,21 @@ module decoder(
 
     // 3. REGISTER LOAD (WRITE) CONTROLS
     wire reg_write_enable = is_alu | cmd_rd | (cmd_mov & cond_met);
+    wire [1:0] load_sel = cmd_rd ? src_sel : dest_sel;
 
-    assign reg_a_load = enable & (reg_write_enable & (dest_sel == 2'b00));
-    assign reg_b_load = enable & (reg_write_enable & (dest_sel == 2'b01));
-    assign pc_load    = enable & (reg_write_enable & (dest_sel == 2'b10)); 
+    assign reg_a_load = enable & (reg_write_enable & (load_sel == 2'b00));
+    assign reg_b_load = enable & (reg_write_enable & (load_sel == 2'b01));
+    assign pc_load    = enable & (reg_write_enable & (load_sel == 2'b10)); 
 
     // 4. REGISTER DATA OUTPUT CONTROLS
-    wire [1:0] bus_driver_sel = cmd_wr ? dest_sel : src_sel;
-    wire bus_drive_en = is_alu | cmd_mov | cmd_wr;
+    wire is_immediate = cmd_mov & (src_sel == 2'b11);
+    
+    // FIX: Apply cond_met ONLY to cmd_mov. Memory Writes (cmd_wr) are always unconditional!
+    wire bus_drive_en = ((cmd_mov & cond_met) | cmd_wr) & ~is_immediate;
 
-    assign reg_a_data_output_enable = enable & (bus_drive_en & (bus_driver_sel == 2'b00));
-    assign reg_b_data_output_enable = enable & (bus_drive_en & (bus_driver_sel == 2'b01));
-    assign pc_data_output_enable    = enable & (bus_drive_en & (bus_driver_sel == 2'b10));
+    assign reg_a_data_output_enable = enable & (bus_drive_en & (src_sel == 2'b00));
+    assign reg_b_data_output_enable = enable & (bus_drive_en & (src_sel == 2'b01));
+    assign pc_data_output_enable    = enable & (bus_drive_en & (src_sel == 2'b10));
 
     // 5. ALU CONTROLS & COMMANDS
     wire [2:0] alu_op = instruction[6:4];
@@ -90,22 +92,21 @@ module decoder(
     assign alu_cmd_or  = enable & (is_alu & (alu_op == 3'b011));
     assign alu_cmd_xor = enable & (is_alu & (alu_op == 3'b100));
 
-    // 6. ADDRESS & PC CLOCK CONTROLS (Grounded here)
-    wire is_immediate = (src_sel == 2'b11);
+    // 6. ADDRESS & PC CLOCK CONTROLS
+    wire addr_drive_en = is_mem | is_immediate;
+    wire [1:0] addr_sel = is_mem ? dest_sel : 2'b10;
     
-    assign pc_address_output_enable    = enable & is_immediate; 
+    assign reg_a_address_output_enable = enable & (addr_drive_en & (addr_sel == 2'b00));
+    assign reg_b_address_output_enable = enable & (addr_drive_en & (addr_sel == 2'b01));
+    assign pc_address_output_enable    = enable & (addr_drive_en & (addr_sel == 2'b10));
+    
     assign pc_increment                = enable & is_immediate; 
-    
-    assign reg_a_address_output_enable = 1'b0; 
-    assign reg_b_address_output_enable = 1'b0;
 
     // 7. MEMORY CONTROL SIGNALS
-    
-    // Determine if the current instruction is trying to touch memory
-    wire is_memory_active = cmd_rd | cmd_wr | ((is_alu | cmd_mov) & (src_sel == 2'b11));
+    wire is_memory_active = is_mem | is_immediate;
     
     assign mem_enable             = enable & is_memory_active;
-    assign mem_data_output_enable = enable & (cmd_rd | ((is_alu | cmd_mov) & (src_sel == 2'b11)));
+    assign mem_data_output_enable = enable & (cmd_rd | is_immediate);
     assign mem_write_enable       = enable & cmd_wr;
 
     // 8. ALU OPERAND SELECTORS
