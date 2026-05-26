@@ -4,10 +4,11 @@ module memory_mapped_output #(
     input  wire       clk,
     input  wire       reset,
     input  wire [7:0] address,
-    input  wire [7:0] data_in,
+    inout  wire [7:0] data_bus,
     output wire [7:0] data_out,
     input  wire       mem_enable,
-    input  wire       mem_write_enable
+    input  wire       mem_write_enable,
+    input  wire       mem_data_output_enable
 );
 
     reg [7:0] data = 8'h00;
@@ -18,9 +19,12 @@ module memory_mapped_output #(
             data <= 8'h00;
         end else begin
             if (mem_enable && mem_write_enable && address == ADDRESS) begin
-                data <= data_in;
+                data <= data_bus;
             end
         end
     end
+
+    assign data_bus = (mem_enable && mem_data_output_enable && address == ADDRESS) ?
+                      data : 8'bz;
 
 endmodule

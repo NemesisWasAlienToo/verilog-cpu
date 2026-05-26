@@ -34,10 +34,11 @@ module mcu(
         .clk(clk),
         .reset(reset),
         .address(address_bus),
-        .data_in(data_bus),
+        .data_bus(data_bus),
         .data_out(out_pins),
         .mem_enable(mem_enable),
-        .mem_write_enable(mem_write_enable)
+        .mem_write_enable(mem_write_enable),
+        .mem_data_output_enable(mem_data_output_enable)
     );
 
     memory_mapped_input #(
