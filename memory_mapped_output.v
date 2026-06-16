@@ -11,20 +11,20 @@ module memory_mapped_output #(
     input  wire       mem_data_output_enable
 );
 
-    reg [7:0] data = 8'h00;
-    assign data_out = data;
+    reg [7:0] q = 8'h00;
+    assign data_out = q;
 
     always @(negedge clk or posedge reset) begin
         if (reset) begin
-            data <= 8'h00;
+            q <= 8'h00;
         end else begin
             if (mem_enable && mem_write_enable && address == ADDRESS) begin
-                data <= data_bus;
+                q <= data_bus;
             end
         end
     end
 
     assign data_bus = (mem_enable && mem_data_output_enable && address == ADDRESS) ?
-                      data : 8'bz;
+                      q : 8'bz;
 
 endmodule
