@@ -48,7 +48,7 @@ module mcu(
         .reset(reset),
         .address(address_bus),
         .data_in(in_pins),
-        .data_out(data_bus),
+        .data_bus(data_bus),
         .mem_enable(mem_enable),
         .mem_data_output_enable(mem_data_output_enable)
     );
