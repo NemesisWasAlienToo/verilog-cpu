@@ -12,13 +12,28 @@ module mcu(
     wire       mem_write_enable;
     wire       mem_data_output_enable;
 
+    // Processor
+    wire [7:0] cpu_data_out;
+    wire       cpu_data_drive;
+    cpu cpu_inst(
+        .clk(clk),
+        .reset(reset),
+        .data_bus_in(data_bus),
+        .data_bus_out(cpu_data_out),
+        .data_bus_drive(cpu_data_drive),
+        .address_pins(address_bus),
+        .mem_enable(mem_enable),
+        .mem_write_enable(mem_write_enable),
+        .mem_data_output_enable(mem_data_output_enable)
+    );
 
     // Memory unit
     reg [7:0] program_mem[0:253];
     initial $readmemh("program.mem", program_mem);
 
-    wire ram_enable = (address_bus < 8'hFE && mem_enable);
-    wire [7:0] memory_data_out = (ram_enable && mem_data_output_enable) ? program_mem[address_bus] : 8'bz;
+    wire ram_enable = (address_bus < 8'hFE) && mem_enable;
+    wire ram_drive  = ram_enable && mem_data_output_enable;
+    wire [7:0] ram_value  = program_mem[address_bus];
 
     always @(negedge clk) begin
         if (ram_enable && mem_write_enable) begin
@@ -26,8 +41,8 @@ module mcu(
         end
     end
 
-    assign data_bus = memory_data_out;
-
+    wire [7:0] mmio_out_value;
+    wire       mmio_out_drive;
     memory_mapped_output #(
         .ADDRESS(8'hFF)
     ) memory_mapped_out_reg_a (
@@ -38,31 +53,30 @@ module mcu(
         .data_out(out_pins),
         .mem_enable(mem_enable),
         .mem_write_enable(mem_write_enable),
-        .mem_data_output_enable(mem_data_output_enable)
+        .mem_data_output_enable(mem_data_output_enable),
+        .bus_value(mmio_out_value),
+        .bus_drive(mmio_out_drive)
     );
 
+    // Memory-mapped input register (0xFE)
+    wire [7:0] mmio_in_value;
+    wire       mmio_in_drive;
     memory_mapped_input #(
         .ADDRESS(8'hFE)
     ) memory_mapped_in_reg_b (
-        .clk(clk),
-        .reset(reset),
         .address(address_bus),
         .data_in(in_pins),
-        .data_bus(data_bus),
         .mem_enable(mem_enable),
-        .mem_data_output_enable(mem_data_output_enable)
+        .mem_data_output_enable(mem_data_output_enable),
+        .bus_value(mmio_in_value),
+        .bus_drive(mmio_in_drive)
     );
 
-
-    // Processor
-    cpu cpu_inst(
-        .clk(clk),
-        .reset(reset),
-        .data_pins(data_bus),
-        .address_pins(address_bus),
-        .mem_enable(mem_enable),
-        .mem_write_enable(mem_write_enable),
-        .mem_data_output_enable(mem_data_output_enable)
-    );
+    assign data_bus =
+        cpu_data_drive ? cpu_data_out   :
+        ram_drive      ? ram_value      :
+        mmio_in_drive  ? mmio_in_value  :
+        mmio_out_drive ? mmio_out_value :
+        8'h00;
 
 endmodule

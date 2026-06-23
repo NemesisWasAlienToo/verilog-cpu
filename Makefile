@@ -51,8 +51,8 @@ $(GPR_OUT): gpr.v gpr.sv
 # Test Decoder (with waveform)
 decoder: $(DECODER_OUT)
 	$(SIMULATOR) $(DECODER_OUT)
-	@echo "Opening decoder.vcd in GTKWave..."
-	$(GTKWAVE) decoder.vcd
+# 	@echo "Opening decoder.vcd in GTKWave..."
+# 	$(GTKWAVE) decoder.vcd
 
 $(DECODER_OUT): decoder.v decoder.sv
 	$(IVERILOG) $(VERILOG_STD) -o $(DECODER_OUT) decoder.v decoder.sv
@@ -60,8 +60,8 @@ $(DECODER_OUT): decoder.v decoder.sv
 # Test Control Unit (with waveform)
 cu: $(CU_OUT)
 	$(SIMULATOR) $(CU_OUT)
-	@echo "Opening cu.vcd in GTKWave..."
-	$(GTKWAVE) cu.vcd
+# 	@echo "Opening cu.vcd in GTKWave..."
+# 	$(GTKWAVE) cu.vcd
 
 $(CU_OUT): cu.v cu.sv decoder.v
 	$(IVERILOG) $(VERILOG_STD) -o $(CU_OUT) cu.v decoder.v cu.sv
@@ -69,8 +69,8 @@ $(CU_OUT): cu.v cu.sv decoder.v
 # Test ALU (with waveform)
 alu: $(ALU_OUT)
 	$(SIMULATOR) $(ALU_OUT)
-	@echo "Opening alu.vcd in GTKWave..."
-	$(GTKWAVE) alu.vcd
+# 	@echo "Opening alu.vcd in GTKWave..."
+# 	$(GTKWAVE) alu.vcd
 
 $(ALU_OUT): alu.v alu.sv
 	$(IVERILOG) $(VERILOG_STD) -o $(ALU_OUT) alu.v alu.sv
@@ -82,19 +82,19 @@ memory_mapped_output:
 	$(IVERILOG) $(VERILOG_STD) -o memory_mapped_output.out memory_mapped_output.v memory_mapped_output.sv
 	$(SIMULATOR) memory_mapped_output.out
 	@echo "Opening memory_mapped_output.vcd in GTKWave..."
-	$(GTKWAVE) memory_mapped_output.vcd
+# 	$(GTKWAVE) memory_mapped_output.vcd
 
 memory_mapped_input:
 	$(IVERILOG) $(VERILOG_STD) -o memory_mapped_input.out memory_mapped_input.v memory_mapped_input.sv
 	$(SIMULATOR) memory_mapped_input.out
 	@echo "Opening memory_mapped_input.vcd in GTKWave..."
-	$(GTKWAVE) memory_mapped_input.vcd
+# 	$(GTKWAVE) memory_mapped_input.vcd
 
 # Test CPU (with waveform)
 cpu: $(CPU_OUT)
 	$(SIMULATOR) $(CPU_OUT)
 	@echo "Opening cpu.vcd in GTKWave..."
-	$(GTKWAVE) cpu.vcd
+# 	$(GTKWAVE) cpu.vcd
 
 $(CPU_OUT): cpu.v cpu.sv pc.v gpr.v decoder.v cu.v alu.v
 	$(IVERILOG) $(VERILOG_STD) -o $(CPU_OUT) cpu.v pc.v gpr.v decoder.v cu.v alu.v cpu.sv
@@ -103,7 +103,7 @@ $(CPU_OUT): cpu.v cpu.sv pc.v gpr.v decoder.v cu.v alu.v
 mcu: $(MCU_OUT)
 	$(SIMULATOR) $(MCU_OUT)
 	@echo "Opening mcu.vcd in GTKWave..."
-	$(GTKWAVE) mcu.vcd
+# 	$(GTKWAVE) mcu.vcd
 
 $(MCU_OUT): mcu.v mcu.sv cpu.v pc.v gpr.v decoder.v cu.v alu.v memory_mapped_output.v memory_mapped_input.v
 	$(IVERILOG) $(VERILOG_STD) -o $(MCU_OUT) cpu.v pc.v gpr.v decoder.v cu.v alu.v mcu.v memory_mapped_output.v memory_mapped_input.v mcu.sv

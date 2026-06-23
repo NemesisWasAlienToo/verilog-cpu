@@ -3,15 +3,12 @@ module pc (
     input  wire       reset,
     input  wire       increment,
     input  wire       load,
-    input  wire       data_output_enable,
-    input  wire       address_output_enable,
-    
-    inout  wire [7:0] data_bus,
-    output wire [7:0] data_alu,
-    output wire [7:0] address_out
+
+    input  wire [7:0] data_bus,
+    output wire [7:0] value
 );
 
-    reg [7:0] q = 8'h00;
+    reg [7:0] q = 8'b00000000;
 
     always @(negedge clk or posedge reset) begin
         if (reset) begin
@@ -23,8 +20,6 @@ module pc (
         end
     end
 
-    assign data_bus    = (data_output_enable) ? q : 8'bz;
-    assign address_out = (address_output_enable) ? q : 8'bz;
-    assign data_alu = q;
+    assign value = q;
 
 endmodule

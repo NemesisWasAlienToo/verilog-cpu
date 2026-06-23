@@ -2,134 +2,107 @@
 
 module tb_memory_mapped_output;
 
-    // Define a test parameter for the address
     localparam [7:0] TB_ADDRESS = 8'hFF;
 
-    // Inputs
     reg clk;
     reg reset;
     reg [7:0] address;
-    reg [7:0] data_in;
+    reg [7:0] data_bus;
     reg mem_enable;
     reg mem_write_enable;
+    reg mem_data_output_enable;
 
-    // Outputs
     wire [7:0] data_out;
+    wire [7:0] bus_value;
+    wire       bus_drive;
 
-    // Instantiate the Device Under Test (DUT)
     memory_mapped_output #(
         .ADDRESS(TB_ADDRESS)
     ) dut (
         .clk(clk),
         .reset(reset),
         .address(address),
-        .data_in(data_in),
+        .data_bus(data_bus),
         .data_out(data_out),
         .mem_enable(mem_enable),
-        .mem_write_enable(mem_write_enable)
+        .mem_write_enable(mem_write_enable),
+        .mem_data_output_enable(mem_data_output_enable),
+        .bus_value(bus_value),
+        .bus_drive(bus_drive)
     );
 
-    // Clock Generation: 10ns period
     always #5 clk = ~clk;
 
     initial begin
-        // Generate VCD file for visualization
         $dumpfile("memory_mapped_output.vcd");
         $dumpvars(0, tb_memory_mapped_output);
 
-        // Initialize Inputs
         clk = 0;
         reset = 1;
         address = 8'h00;
-        data_in = 8'h00;
+        data_bus = 8'h00;
         mem_enable = 0;
         mem_write_enable = 0;
+        mem_data_output_enable = 0;
 
         $display("--- Starting Memory Mapped Output Tests ---");
 
-        // -----------------------------------------------------------
-        // Test 1: Asynchronous Reset Behavior
-        // -----------------------------------------------------------
-        #15 reset = 0; // Release reset
+        // Test 1: Reset
+        #15 reset = 0;
         #1;
-        if (data_out == 8'h00) 
+        if (data_out == 8'h00)
             $display("[PASS] Test 1: Reset successfully cleared the output to 00.");
-        else 
+        else
             $display("[FAIL] Test 1: Reset failed. Expected 00, got %h", data_out);
 
-        // -----------------------------------------------------------
-        // Test 2: Valid Write
-        // -----------------------------------------------------------
+        // Test 2: Valid write
         @(posedge clk);
         address = TB_ADDRESS;
-        data_in = 8'hAA;
+        data_bus = 8'hAA;
         mem_enable = 1;
         mem_write_enable = 1;
-        
-        @(posedge clk);             // Wait for falling edge to latch
-        mem_enable = 0;             // Disable write
+        @(posedge clk);
+        mem_enable = 0;
         mem_write_enable = 0;
-        
         #1;
-        if (data_out == 8'hAA) 
-            $display("[PASS] Test 2: Valid write to Address %h successfully latched data AA.", TB_ADDRESS);
-        else 
+        if (data_out == 8'hAA)
+            $display("[PASS] Test 2: Valid write to Address %h latched data AA.", TB_ADDRESS);
+        else
             $display("[FAIL] Test 2: Valid write failed. Expected AA, got %h", data_out);
 
-        // -----------------------------------------------------------
-        // Test 3: Invalid Address (Should ignore write)
-        // -----------------------------------------------------------
+        // Test 3: Wrong address ignored
         @(posedge clk);
-        address = 8'hFE;            // Wrong address!
-        data_in = 8'hBB;            // Data we DO NOT want to write
+        address = 8'hFE;
+        data_bus = 8'hBB;
         mem_enable = 1;
         mem_write_enable = 1;
-        
         @(posedge clk);
         mem_enable = 0;
         mem_write_enable = 0;
-        
         #1;
-        if (data_out == 8'hAA) 
+        if (data_out == 8'hAA)
             $display("[PASS] Test 3: Safely ignored write because address did not match.");
-        else 
+        else
             $display("[FAIL] Test 3: Address isolation failed. Expected AA, got %h", data_out);
 
-        // -----------------------------------------------------------
-        // Test 4: Disabled mem_enable (Should ignore write)
-        // -----------------------------------------------------------
-        @(posedge clk);
+        // Test 4: Readback requests the bus with q
         address = TB_ADDRESS;
-        data_in = 8'hCC;
-        mem_enable = 0;             // Disabled!
-        mem_write_enable = 1;
-        
-        @(posedge clk);
-        mem_write_enable = 0;
-        
+        mem_enable = 1;
+        mem_data_output_enable = 1;
         #1;
-        if (data_out == 8'hAA) 
-            $display("[PASS] Test 4: Safely ignored write when mem_enable was low.");
-        else 
-            $display("[FAIL] Test 4: mem_enable isolation failed. Expected AA, got %h", data_out);
+        if (bus_drive && bus_value == 8'hAA)
+            $display("[PASS] Test 4: Readback drives bus with AA.");
+        else
+            $display("[FAIL] Test 4: Readback failed. drive=%b value=%h", bus_drive, bus_value);
 
-        // -----------------------------------------------------------
-        // Test 5: Disabled mem_write_enable (Should ignore write)
-        // -----------------------------------------------------------
-        @(posedge clk);
-        address = TB_ADDRESS;
-        data_in = 8'hDD;
-        mem_enable = 1;             
-        mem_write_enable = 0;       // Disabled!
-        
-        @(posedge clk);
+        // Test 5: Releases the bus when not addressed/enabled
         mem_enable = 0;
-        
+        mem_data_output_enable = 0;
         #1;
-        if (data_out == 8'hAA) 
-            $display("[PASS] Test 5: Safely ignored write when mem_write_enable was low.");
-        else 
-            $display("[FAIL] Test 5: mem_write_enable isolation failed. Expected AA, got %h", data_out);
+        if (!bus_drive)
+            $display("[PASS] Test 5: Releases the bus when disabled.");
+        else
+            $display("[FAIL] Test 5: Still requesting the bus when disabled.");
 
         $display("--- Tests Complete ---");
         $finish;

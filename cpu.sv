@@ -4,28 +4,36 @@ module tb_cpu_full;
 
     reg clk;
     reg reset;
-    wire [7:0] data_pins;
     wire [7:0] address_pins;
     wire mem_enable, mem_write_enable, mem_data_output_enable;
 
+    wire [7:0] cpu_data_out;
+    wire       cpu_data_drive;
+
     reg [7:0] memory [0:255];
 
-    // Read Logic: If CPU wants to read, output the memory at address_pins
-    assign data_pins = (mem_enable && mem_data_output_enable && !mem_write_enable) ? memory[address_pins] : 8'bz;
+    wire mem_read = mem_enable && mem_data_output_enable && !mem_write_enable;
+    wire [7:0] data_bus = cpu_data_drive ? cpu_data_out          :
+                          mem_read       ? memory[address_pins]  :
+                          8'h00;
 
-    // Write Logic: If CPU wants to write, capture data_pins into memory
+    cpu uut (
+        .clk(clk),
+        .reset(reset),
+        .data_bus_in(data_bus),
+        .data_bus_out(cpu_data_out),
+        .data_bus_drive(cpu_data_drive),
+        .address_pins(address_pins),
+        .mem_enable(mem_enable),
+        .mem_write_enable(mem_write_enable),
+        .mem_data_output_enable(mem_data_output_enable)
+    );
+
     always @(negedge clk) begin
         if (mem_enable && mem_write_enable) begin
-            memory[address_pins] <= data_pins;
+            memory[address_pins] <= data_bus;
         end
     end
-
-    // Instantiate CPU
-    cpu uut (
-        .clk(clk), .reset(reset), .data_pins(data_pins),
-        .address_pins(address_pins), .mem_enable(mem_enable),
-        .mem_write_enable(mem_write_enable), .mem_data_output_enable(mem_data_output_enable)
-    );
 
     always #5 clk = ~clk;
 
@@ -35,12 +43,12 @@ module tb_cpu_full;
 
         memory[8'h00] = 8'b0_00_0_01_11; // MOV B, #IMM  (Hex 07)
         memory[8'h01] = 8'h05;           // Immediate data: 05
-        
+
         memory[8'h02] = 8'b0_00_0_00_11; // MOV A, #IMM  (Hex 03)
         memory[8'h03] = 8'hAA;           // Immediate data: AA
-        
+
         memory[8'h04] = 8'b1_000_00_01;  // ADD A, B     (Hex 81)
-        
+
         memory[8'h05] = 8'b0_11_1_00_01; // WR [A], B    (Hex 71)
 
         clk = 0;
