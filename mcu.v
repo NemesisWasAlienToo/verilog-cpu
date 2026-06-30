@@ -7,7 +7,7 @@ module mcu(
 
     // wire clk, clk_fb;
     // PLLE2_BASE #(.CLKIN1_PERIOD(8.0), .CLKFBOUT_MULT(8), .CLKOUT0_DIVIDE(127))
-    // PLLE2_BASE_inst(.CLKIN1(clk), .CLKFBOUT(clk_fb), .CLKFBIN(clk_fb), .CLKOUT0(clk));
+    // PLLE2_BASE_inst(.CLKIN1(clk125), .CLKFBOUT(clk_fb), .CLKFBIN(clk_fb), .CLKOUT0(clk));
 
 
     // Global bus lines
