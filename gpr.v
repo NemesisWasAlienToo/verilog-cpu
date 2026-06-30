@@ -9,7 +9,7 @@ module gpr (
 
     reg [7:0] q = 8'h00;
 
-    always @(negedge clk or posedge reset) begin
+    always @(posedge clk or posedge reset) begin
         if (reset)
             q <= 8'h00;
         else if (load)

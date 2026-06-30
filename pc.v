@@ -10,7 +10,7 @@ module pc (
 
     reg [7:0] q = 8'b00000000;
 
-    always @(negedge clk or posedge reset) begin
+    always @(posedge clk or posedge reset) begin
         if (reset) begin
             q <= 8'b00000000;
         end else if (load) begin

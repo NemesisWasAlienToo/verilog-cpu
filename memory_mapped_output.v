@@ -18,7 +18,7 @@ module memory_mapped_output #(
 
     reg [7:0] q = 8'h00;
 
-    always @(negedge clk or posedge reset) begin
+    always @(posedge clk or posedge reset) begin
         if (reset) begin
             q <= 8'h00;
         end else begin

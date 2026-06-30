@@ -22,7 +22,7 @@ module tb_mcu;
         fd = $fopen("program.mem", "w");
         $fclose(fd);
         
-        $dumpfile("mcu_test.vcd");
+        $dumpfile("mcu.vcd");
         $dumpvars(0, tb_mcu);
 
         clk = 0;
